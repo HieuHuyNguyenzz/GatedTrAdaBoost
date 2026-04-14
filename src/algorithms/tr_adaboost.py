@@ -23,12 +23,14 @@ class ETCDataset(Dataset):
         return self.X[idx].unsqueeze(0), self.y[idx]
 
 class MultiClassTrAdaBoostCNN:
+    """
+    Original Multi-class TrAdaBoost with CNN as weak learner.
+    """
     def __init__(self, model_class, n_estimators=10):
         self.model_class = model_class
         self.n_estimators = n_estimators
         self.learners = []
         self.alphas = []
-        self.gate = None
         
     def fit(self, target_X, target_y, source_X, source_y):
         n_target = len(target_y)
@@ -115,67 +117,13 @@ class MultiClassTrAdaBoostCNN:
         
         return np.array(all_preds).T # (samples, T)
 
-    def train_gate(self, X_train, y_train):
-        """
-        Train the gating network based on learner contributions.
-        """
-        print("Generating contribution labels for Gating Network...")
-        # 1. Compute contributions c_{i,t} = alpha_t * I(h_t(x_i) = y_i)
-        preds = self._get_all_predictions(X_train) # (N, T)
-        alphas = np.array(self.alphas) # (T,)
-        
-        # Broadcasted indicator: (N, T)
-        # y_train: (N,) -> (N, 1)
-        contributions = (preds == y_train[:, np.newaxis]) * alphas
-        
-        # 2. Soft labels q_{i,t} = softmax(c_{i,t} / tau)
-        exp_c = np.exp(contributions / GATING_TAU)
-        q = exp_c / np.sum(exp_c, axis=1, keepdims=True)
-        q_tensor = torch.from_numpy(q).float().to(DEVICE)
-        
-        X_tensor = torch.from_numpy(X_train).float().to(DEVICE)
-        X_dataset = ETCDataset(X_train, y_train)
-        dataloader = DataLoader(X_dataset, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
-        
-        # 3. Initialize Gate
-        self.gate = GatingNetwork(input_shape=X_train[0].shape, num_learners=self.n_estimators).to(DEVICE)
-        optimizer = optim.Adam(self.gate.parameters(), lr=GATING_LR)
-        
-        print("Training Gating Network...")
-        self.gate.train()
-        for epoch in range(GATING_EPOCHS):
-            total_loss = 0
-            for i, (data, _) in enumerate(dataloader):
-                data = data.to(DEVICE)
-                # Get target q for this batch
-                batch_q = q_tensor[i*BATCH_SIZE : (i+1)*BATCH_SIZE]
-                if batch_q.size(0) == 0: continue
-                
-                optimizer.zero_grad()
-                p_logits = self.gate(data)
-                p = torch.softmax(p_logits, dim=1)
-                
-                # KL Divergence Loss
-                # KL(q||p) = sum q * log(q/p)
-                kl_loss = torch.sum(batch_q * (torch.log(batch_q + 1e-10) - torch.log(p + 1e-10)), dim=1).mean()
-                
-                # Sparsity Loss (Entropy)
-                sparse_loss = torch.sum(p * torch.log(p + 1e-10), dim=1).mean()
-                
-                loss = LAMBDA_KL * kl_loss + LAMBDA_SPARSE * sparse_loss
-                loss.backward()
-                optimizer.step()
-                total_loss += loss.item()
-                
-            print(f"Gate Epoch {epoch+1}/{GATING_EPOCHS}, Loss: {total_loss/len(dataloader):.4f}")
-
     def predict(self, X_test):
         """Full AdaBoost prediction."""
         X_test_tensor = torch.from_numpy(X_test).float().to(DEVICE)
         if X_test_tensor.dim() == 3:
             X_test_tensor = X_test_tensor.unsqueeze(1)
             
-        vote_matrix = np.zeros((X_test.size(0), NUM_CLASSES))
+        vote_matrix = np.zeros((X_test.shape[0], NUM_CLASSES))
         
         with torch.no_grad():
             for alpha_t, learner in zip(self.alphas, self.learners):
@@ -191,6 +139,57 @@ class MultiClassTrAdaBoostCNN:
                     
         return np.argmax(vote_matrix, axis=1)
 
+class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
+    """
+    Improved Multi-class TrAdaBoost with Gating Network for Sparse Inference.
+    """
+    def __init__(self, model_class, n_estimators=10):
+        super().__init__(model_class, n_estimators)
+        self.gate = None
+
+    def train_gate(self, X_train, y_train):
+        """
+        Train the gating network based on learner contributions.
+        """
+        print("Generating contribution labels for Gating Network...")
+        preds = self._get_all_predictions(X_train) 
+        alphas = np.array(self.alphas) 
+        
+        contributions = (preds == y_train[:, np.newaxis]) * alphas
+        
+        exp_c = np.exp(contributions / GATING_TAU)
+        q = exp_c / np.sum(exp_c, axis=1, keepdims=True)
+        q_tensor = torch.from_numpy(q).float().to(DEVICE)
+        
+        X_dataset = ETCDataset(X_train, y_train)
+        dataloader = DataLoader(X_dataset, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+        
+        self.gate = GatingNetwork(input_shape=X_train[0].shape, num_learners=self.n_estimators).to(DEVICE)
+        optimizer = optim.Adam(self.gate.parameters(), lr=GATING_LR)
+        
+        print("Training Gating Network...")
+        self.gate.train()
+        for epoch in range(GATING_EPOCHS):
+            total_loss = 0
+            for i, (data, _) in enumerate(dataloader):
+                data = data.to(DEVICE)
+                batch_q = q_tensor[i*BATCH_SIZE : (i+1)*BATCH_SIZE]
+                if batch_q.size(0) == 0: continue
+                
+                optimizer.zero_grad()
+                p_logits = self.gate(data)
+                p = torch.softmax(p_logits, dim=1)
+                
+                kl_loss = torch.sum(batch_q * (torch.log(batch_q + 1e-10) - torch.log(p + 1e-10)), dim=1).mean()
+                sparse_loss = torch.sum(p * torch.log(p + 1e-10), dim=1).mean()
+                
+                loss = LAMBDA_KL * kl_loss + LAMBDA_SPARSE * sparse_loss
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+                
+            print(f"Gate Epoch {epoch+1}/{GATING_EPOCHS}, Loss: {total_loss/len(dataloader):.4f}")
+
     def predict_sparse(self, X_test):
         """
         Gated Sparse Inference prediction.
@@ -204,32 +203,22 @@ class MultiClassTrAdaBoostCNN:
             
         self.gate.eval()
         with torch.no_grad():
-            # 1. Compute gating scores
             g_scores = []
             for i in range(0, X_test_tensor.size(0), BATCH_SIZE):
                 batch = X_test_tensor[i : i + BATCH_SIZE]
                 out = self.gate(batch)
                 g_scores.append(out.cpu().numpy())
-            g_scores = np.concatenate(g_scores) # (N, T)
+            g_scores = np.concatenate(g_scores) 
             
-            # 2. Select Top-K learners for each sample
-            # top_k_idx: (N, K)
             top_k_idx = np.argsort(g_scores, axis=1)[:, -GATING_K:]
             
-            # 3. Evaluate only selected learners
-            # To do this efficiently, we still evaluate learners one by one 
-            # but only add their contribution if they are in the Top-K for that sample.
-            vote_matrix = np.zeros((X_test.size(0), NUM_CLASSES))
+            vote_matrix = np.zeros((X_test.shape[0], NUM_CLASSES))
             
             for t in range(self.n_estimators):
-                # Mask for samples where learner t is in top-k
                 mask = np.any(top_k_idx == t, axis=1)
                 if not np.any(mask):
                     continue
                 
-                # Only predict for masked samples
-                # For simplicity in batching, we can predict for all but only use masked
-                # Or we can filter X_test. Filtering is better for speed.
                 X_masked = X_test[mask]
                 X_masked_tensor = torch.from_numpy(X_masked).float().to(DEVICE)
                 if X_masked_tensor.dim() == 3:
@@ -244,8 +233,6 @@ class MultiClassTrAdaBoostCNN:
                         preds_masked.append(torch.argmax(out, dim=1).cpu().numpy())
                 
                 preds_masked = np.concatenate(preds_masked)
-                
-                # Add to vote matrix
                 indices = np.where(mask)[0]
                 alpha_t = self.alphas[t]
                 for idx, pred in zip(indices, preds_masked):

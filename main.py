@@ -3,7 +3,7 @@ from sklearn.metrics import classification_report
 from src.config import SAME_DIST_PATH, DIFF_1_DIST_PATH, TEST_DIST_PATH, DEVICE
 from src.utils.data_loader import load_feather_data
 from src.models.cnn_model import CNNModel
-from src.algorithms.tr_adaboost import MultiClassTrAdaBoostCNN
+from src.algorithms.tr_adaboost import MultiClassTrAdaBoostCNN, GatedMultiClassTrAdaBoostCNN
 
 def main():
     print(f"Using device: {DEVICE}")
@@ -22,30 +22,40 @@ def main():
         return
 
     print(f"Target shape: {target_X.shape}, Source shape: {source_X.shape}, Test shape: {test_X.shape}")
-
-    # Initialize TrAdaBoost
-    print("Initializing MultiClassTrAdaBoostCNN...")
-    model = MultiClassTrAdaBoostCNN(CNNModel, n_estimators=10)
     
-    # 1. Train Full AdaBoost
-    print("Step 1: Training Full AdaBoost ensemble...")
-    model.fit(target_X, target_y, source_X, source_y)
+    # --- Original Algorithm: MultiClassTrAdaBoostCNN ---
+    print("\n" + "="*50)
+    print("Algorithm 1: Original Multi-class TrAdaBoost-CNN")
+    print("="*50)
+    model_orig = MultiClassTrAdaBoostCNN(CNNModel, n_estimators=10)
+    print("Training Original Model...")
+    model_orig.fit(target_X, target_y, source_X, source_y)
     
-    # 2. Train Gating Network
-    print("\nStep 2: Training Gating Network for Sparse Inference...")
-    # Use target data to train the gate (representing the deployment domain)
-    model.train_gate(target_X, target_y)
+    print("\nEvaluating Original Model...")
+    orig_predictions = model_orig.predict(test_X)
+    print("Original AdaBoost Classification Report:\n")
+    print(classification_report(test_y, orig_predictions))
     
-    # 3. Evaluation
-    print("\nEvaluating Full Ensemble...")
-    full_predictions = model.predict(test_X)
-    print("Full AdaBoost Classification Report:\n")
-    print(classification_report(test_y, full_predictions))
+    # --- Improved Algorithm: GatedMultiClassTrAdaBoostCNN ---
+    print("\n" + "="*50)
+    print("Algorithm 2: Improved Gated Multi-class TrAdaBoost-CNN")
+    print("="*50)
+    model_gated = GatedMultiClassTrAdaBoostCNN(CNNModel, n_estimators=10)
+    print("Training Gated Model...")
+    model_gated.fit(target_X, target_y, source_X, source_y)
     
-    print("\nEvaluating Sparse Ensemble (Gated)...")
-    sparse_predictions = model.predict_sparse(test_X)
+    print("\nTraining Gating Network for Sparse Inference...")
+    model_gated.train_gate(target_X, target_y)
+    
+    print("\nEvaluating Gated Model (Full Ensemble)...")
+    gated_full_predictions = model_gated.predict(test_X)
+    print("Gated Full AdaBoost Classification Report:\n")
+    print(classification_report(test_y, gated_full_predictions))
+    
+    print("\nEvaluating Gated Model (Sparse Ensemble)...")
+    gated_sparse_predictions = model_gated.predict_sparse(test_X)
     print("Gated Sparse AdaBoost Classification Report:\n")
-    print(classification_report(test_y, sparse_predictions))
+    print(classification_report(test_y, gated_sparse_predictions))
 
 if __name__ == "__main__":
     main()
