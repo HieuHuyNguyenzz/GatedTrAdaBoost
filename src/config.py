@@ -9,8 +9,23 @@ NUM_EPOCHS = 30
 BATCH_SIZE = 16
 SEED = 42
 
-# Device Configuration
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Gated AdaBoost Settings
+GATING_K = 3 # Top-k learners to select
+GATING_TAU = 1.0 # Temperature for softmax
+GATING_LR = 1e-4
+GATING_EPOCHS = 20
+LAMBDA_KL = 1.0
+LAMBDA_RANK = 0.1
+LAMBDA_SPARSE = 0.1
+LAMBDA_MARGIN = 1.0
+
+# Device Configuration for MacBook M-series and others
+if torch.backends.mps.is_available():
+    DEVICE = torch.device("mps")
+elif torch.cuda.is_available():
+    DEVICE = torch.device("cuda")
+else:
+    DEVICE = torch.device("cpu")
 
 # Data Paths (Can be overridden by environment variables)
 DATA_DIR = "SOICT Data"
