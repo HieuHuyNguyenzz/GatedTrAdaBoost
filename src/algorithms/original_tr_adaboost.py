@@ -53,6 +53,7 @@ class MultiClassTrAdaBoostCNN:
             
             learner.train()
             for epoch in range(NUM_EPOCHS):
+                epoch_loss = 0
                 for data, target in dataloader:
                     data, target = data.to(DEVICE), target.to(DEVICE)
                     optimizer.zero_grad()
@@ -60,6 +61,24 @@ class MultiClassTrAdaBoostCNN:
                     loss = criterion(output, target)
                     loss.backward()
                     optimizer.step()
+                    epoch_loss += loss.item()
+                
+                if (epoch + 1) % 5 == 0 or epoch == 0:
+                    learner.eval()
+                    with torch.no_grad():
+                        eval_loader = DataLoader(ETCDataset(target_X, target_y), batch_size=BATCH_SIZE, shuffle=False, 
+                                                num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+                        correct = 0
+                        total = 0
+                        for data, target in eval_loader:
+                            data = data.to(DEVICE)
+                            output = learner(data)
+                            preds = torch.argmax(output, dim=1)
+                            correct += (preds == target.to(DEVICE)).sum().item()
+                            total += target.size(0)
+                        epoch_acc = 100 * correct / total if total > 0 else 0
+                    learner.train()
+                    print(f"  Epoch {epoch+1}/{NUM_EPOCHS}, Loss: {epoch_loss/len(dataloader):.4f}, Acc: {epoch_acc:.2f}%")
             
             # Calculate training accuracy on TARGET domain only
             learner.eval()
