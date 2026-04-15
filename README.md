@@ -39,14 +39,33 @@ Ensure you have the following dependencies installed:
 
 ### Running the Project
 
-To run the training and evaluation pipeline:
+The project is executed via `main.py` with different modes depending on whether you want to train or evaluate the models.
 
+#### Command Syntax
 ```bash
-python main.py
+python main.py --mode <mode_name>
 ```
 
-The script will:
-1. Load datasets (Source, Target, and Test).
-2. Train and evaluate the original `MultiClassTrAdaBoostCNN`.
-3. Train and evaluate the `GatedMultiClassTrAdaBoostCNN` (both full and sparse inference).
-4. Output classification reports for each model.
+#### Available Modes
+| Mode | Description |
+| :--- | :--- |
+| `train_full` | Trains both the Original and Gated ensembles from scratch and saves them to disk. |
+| `train_gate` | Loads existing weak learners and only trains/optimizes the Gating Network. |
+| `test_no_gating` | Evaluates the performance of the Full Ensemble (baseline). |
+| `test_with_gating` | Evaluates the Sparse Inference performance with different top-k learners. |
+| `test` (Default) | Performs both full and sparse evaluations for a comprehensive comparison. |
+
+#### Examples
+```bash
+# To train everything from scratch
+python main.py --mode train_full
+
+# To only update the Gating Network
+python main.py --mode train_gate
+
+# To run comprehensive tests
+python main.py --mode test
+```
+
+The script will automatically handle data loading, model persistence (saving/loading `.pth` files), and generate classification reports for the test dataset.
+

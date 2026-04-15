@@ -6,8 +6,11 @@ NUM_CLASSES = 3
 PACKET_NUM = 20
 CLIENT_LR = 1e-4
 NUM_EPOCHS = 30
-BATCH_SIZE = 16
+BATCH_SIZE = 64  # Increased for better GPU utilization on M-series
 SEED = 42
+
+# DataLoader Settings for Apple Silicon
+NUM_WORKERS = 4  # Parallel data loading for faster preprocessing
 
 # Gated AdaBoost Settings
 GATING_K = 3 # Top-k learners to select
