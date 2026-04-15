@@ -15,12 +15,15 @@ This repository implements a Transfer Learning-based traffic classification algo
 ├── src/
 │   ├── config.py           # Path configurations and hyperparameters
 │   ├── algorithms/
-│   │   └── tr_adaboost.py  # TrAdaBoost and Gated TrAdaBoost implementations
+│   │   ├── original_tr_adaboost.py  # Original TrAdaBoost implementation
+│   │   └── gated_tr_adaboost.py      # Gated TrAdaBoost implementation
 │   ├── models/
 │   │   ├── cnn_model.py    # CNN architecture for weak learners
 │   │   └── gating_net.py   # MLP architecture for the Gating Network
 │   └── utils/
-│       └── data_loader.py  # Utilities for loading feather datasets
+│       ├── data_loader.py  # Utilities for loading feather datasets
+│       └── dataset.py      # PyTorch Dataset class
+├── Data/                   # Data files (Domain 1_32.feather, Domain 2_32.feather)
 └── README.md
 ```
 
@@ -51,13 +54,17 @@ python main.py --mode <mode_name>
 | :--- | :--- |
 | `train_full` | Trains both the Original and Gated ensembles from scratch and saves them to disk. |
 | `train_gate` | Loads existing weak learners and only trains/optimizes the Gating Network. |
+| `tradaboost_only` | Trains and tests only the original TrAdaBoost model (faster, no Gating Network). |
 | `test_no_gating` | Evaluates the performance of the Full Ensemble (baseline). |
 | `test_with_gating` | Evaluates the Sparse Inference performance with different top-k learners. |
 | `test` (Default) | Performs both full and sparse evaluations for a comprehensive comparison. |
 
 #### Examples
 ```bash
-# To train everything from scratch
+# Train only original TrAdaBoost (faster - recommended for initial experiments)
+python main.py --mode tradaboost_only
+
+# Train everything from scratch
 python main.py --mode train_full
 
 # To only update the Gating Network

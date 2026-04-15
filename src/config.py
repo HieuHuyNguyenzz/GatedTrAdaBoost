@@ -1,7 +1,7 @@
 import torch
 
 # General Settings
-NUM_FEATURE = 256
+NUM_FEATURE = 32  # Updated for new data format (32 features instead of 256)
 NUM_CLASSES = 3
 PACKET_NUM = 20
 CLIENT_LR = 1e-4
@@ -30,8 +30,8 @@ elif torch.cuda.is_available():
 else:
     DEVICE = torch.device("cpu")
 
-# Data Paths (Can be overridden by environment variables)
-DATA_DIR = "SOICT Data"
-SAME_DIST_PATH = f"{DATA_DIR}/df0.01.feather"
-DIFF_1_DIST_PATH = f"{DATA_DIR}/A_data1.feather"
-TEST_DIST_PATH = f"{DATA_DIR}/df0.99.feather"
+# Data Paths
+DATA_DIR = "Data"
+SOURCE_PATH = f"{DATA_DIR}/Domain 1_32.feather"
+TARGET_PATH = f"{DATA_DIR}/Domain 2_32.feather"
+TARGET_TEST_RATIO = 0.9  # 90% of target domain for testing (only 10% for training - limited target data scenario)

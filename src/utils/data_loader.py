@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
 from src.config import NUM_FEATURE, PACKET_NUM
 
 def data_processing(df):
@@ -31,11 +32,38 @@ def data_processing(df):
     
     return X.astype(np.float32), y.astype(np.int64)
 
-def load_feather_data(path):
-    """Loads a feather file and processes it."""
+def load_source_data(path):
+    """Loads source domain data (full dataset for training)."""
     try:
         df = pd.read_feather(path)
         return data_processing(df)
     except Exception as e:
-        print(f"Error loading data from {path}: {e}")
+        print(f"Error loading source data from {path}: {e}")
         return None, None
+
+def load_target_data(path, test_ratio=0.2, seed=42):
+    """
+    Loads target domain data and splits into train/test.
+    
+    Args:
+        path: Path to target domain feather file.
+        test_ratio: Ratio of data for testing (default 0.2 = 20%).
+        seed: Random seed for reproducibility.
+        
+    Returns:
+        tuple: (train_X, train_y, test_X, test_y)
+    """
+    try:
+        df = pd.read_feather(path)
+        X, y = data_processing(df)
+        
+        # Split target domain into train and test
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_ratio, random_state=seed, stratify=y
+        )
+        
+        print(f"Target domain: {len(X)} samples -> Train: {len(X_train)}, Test: {len(X_test)}")
+        return X_train, y_train, X_test, y_test
+    except Exception as e:
+        print(f"Error loading target data from {path}: {e}")
+        return None, None, None, None

@@ -2,8 +2,8 @@ import numpy as np
 import os
 import argparse
 from sklearn.metrics import classification_report
-from src.config import SAME_DIST_PATH, DIFF_1_DIST_PATH, TEST_DIST_PATH, DEVICE
-from src.utils.data_loader import load_feather_data
+from src.config import SOURCE_PATH, TARGET_PATH, TARGET_TEST_RATIO, DEVICE
+from src.utils.data_loader import load_source_data, load_target_data
 from src.models.cnn_model import CNNModel
 from src.algorithms.original_tr_adaboost import MultiClassTrAdaBoostCNN
 from src.algorithms.gated_tr_adaboost import GatedMultiClassTrAdaBoostCNN
@@ -11,8 +11,9 @@ from src.algorithms.gated_tr_adaboost import GatedMultiClassTrAdaBoostCNN
 def main():
     parser = argparse.ArgumentParser(description="Multi-Class TrAdaBoost-CNN Training and Evaluation")
     parser.add_argument('--mode', type=str, default='test', 
-                        choices=['train_full', 'train_gate', 'test_no_gating', 'test_with_gating', 'test'], 
+                        choices=['train_full', 'train_gate', 'tradaboost_only', 'test_no_gating', 'test_with_gating', 'test'], 
                         help="Execution mode: 'train_full' to train everything, 'train_gate' to only train Gating Network, "
+                             "'tradaboost_only' to train/test only original TrAdaBoost, "
                              "'test_no_gating' for full ensemble evaluation, 'test_with_gating' for sparse evaluation, "
                              "'test' for both.")
     args = parser.parse_args()
@@ -20,22 +21,20 @@ def main():
     print(f"Using device: {DEVICE}")
     print(f"Execution Mode: {args.mode}")
     
-    print("Loading data...")
-    # Target domain (Same distribution)
-    target_X, target_y = load_feather_data(SAME_DIST_PATH)
+    print("\nLoading data...")
+    # Source domain: Full dataset for training
+    source_X, source_y = load_source_data(SOURCE_PATH)
     
-    # Source domain (Diff distribution)
-    source_X, source_y = load_feather_data(DIFF_1_DIST_PATH)
+    # Target domain: Split into train/test
+    target_train_X, target_train_y, test_X, test_y = load_target_data(TARGET_PATH, TARGET_TEST_RATIO)
     
-    # Test domain
-    test_X, test_y = load_feather_data(TEST_DIST_PATH)
-    
-    if target_X is None or source_X is None or test_X is None:
+    if source_X is None or target_train_X is None or test_X is None:
         print("Error loading datasets. Please check paths in src/config.py")
         return
 
-    input_shape = target_X[0].shape
-    print(f"Target shape: {target_X.shape}, Source shape: {source_X.shape}, Test shape: {test_X.shape}")
+    input_shape = target_train_X[0].shape
+    print(f"\nSource domain (Domain 1): {source_X.shape} flows")
+    print(f"Target domain (Domain 2): Train {target_train_X.shape}, Test {test_X.shape}")
     
     # Paths for saving models
     ORIG_MODEL_PATH = "model_orig.pth"
@@ -43,26 +42,40 @@ def main():
     
     # --- Setup Models ---
     model_orig = MultiClassTrAdaBoostCNN(CNNModel, n_estimators=10)
-    model_gated = GatedMultiClassTrAdaBoostCNN(CNNModel, n_estimators=10)
+    
+    # Only create gated model if needed
+    if args.mode not in ['tradaboost_only']:
+        model_gated = GatedMultiClassTrAdaBoostCNN(CNNModel, n_estimators=10)
     
     # 1. Handle Original Model
-    if args.mode == 'train_full':
-        print("\nTraining Original Model...")
-        model_orig.fit(target_X, target_y, source_X, source_y)
+    if args.mode == 'train_full' or args.mode == 'tradaboost_only':
+        print("\nTraining Original TrAdaBoost Model...")
+        model_orig.fit(target_train_X, target_train_y, source_X, source_y)
         model_orig.save(ORIG_MODEL_PATH, input_shape)
     elif os.path.exists(ORIG_MODEL_PATH):
         print("Loading pre-trained Original Model...")
         model_orig.load(ORIG_MODEL_PATH)
     else:
-        print("Error: No pre-trained Original Model found. Please run with --mode train_full first.")
+        print("Error: No pre-trained Original Model found. Please run with --mode train_full or tradaboost_only first.")
         return
     
-    # 2. Handle Gated Model
+    # --- Evaluation: Original TrAdaBoost Only ---
+    print("\n" + "="*60)
+    print(" EVALUATION: Original Multi-class TrAdaBoost-CNN ")
+    print("="*60)
+    orig_predictions = model_orig.predict(test_X)
+    print(classification_report(test_y, orig_predictions))
+    
+    # If only TrAdaBoost requested, stop here
+    if args.mode == 'tradaboost_only':
+        return
+    
+    # 2. Handle Gated Model (for modes beyond tradaboost_only)
     if args.mode == 'train_full':
         print("\nTraining Gated Model (Base Ensemble)...")
-        model_gated.fit(target_X, target_y, source_X, source_y)
+        model_gated.fit(target_train_X, target_train_y, source_X, source_y)
         print("\nTraining Gating Network for Sparse Inference...")
-        model_gated.train_gate(target_X, target_y)
+        model_gated.train_gate(target_train_X, target_train_y)
         model_gated.save(GATED_MODEL_PATH, input_shape)
         
     elif args.mode == 'train_gate':
@@ -79,7 +92,7 @@ def main():
             return
             
         print("\nRe-training Gating Network...")
-        model_gated.train_gate(target_X, target_y)
+        model_gated.train_gate(target_train_X, target_train_y)
         model_gated.save(GATED_MODEL_PATH, input_shape)
     else:
         if os.path.exists(GATED_MODEL_PATH):
@@ -97,13 +110,8 @@ def main():
         print(" EVALUATION WITHOUT GATING (Full Ensemble) ")
         print("="*60)
         
-        # Original Model
-        print("\n[1] Original Multi-class TrAdaBoost-CNN:")
-        orig_predictions = model_orig.predict(test_X)
-        print(classification_report(test_y, orig_predictions))
-        
         # Gated Model (Full mode)
-        print("\n[2] Gated Model (Running in Full Mode):")
+        print("\n[1] Gated Model (Running in Full Mode):")
         gated_full_predictions = model_gated.predict(test_X)
         print(classification_report(test_y, gated_full_predictions))
 
