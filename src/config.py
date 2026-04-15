@@ -20,7 +20,7 @@ set_seed(SEED)
 NUM_FEATURE = 32
 NUM_CLASSES = 3
 PACKET_NUM = 20
-CLIENT_LR = 1e-3
+CLIENT_LR = 1e-4
 NUM_EPOCHS = 30
 BATCH_SIZE = 64
 
@@ -30,8 +30,8 @@ NUM_WORKERS = 0  # Set to 0 to avoid multiprocessing issues on Mac
 # Gated AdaBoost Settings
 GATING_K = 3 # Top-k learners to select
 GATING_TAU = 1.0 # Temperature for softmax
-GATING_LR = 1e-3
-GATING_EPOCHS = 50
+GATING_LR = 1e-4
+GATING_EPOCHS = 10
 GATING_VAL_RATIO = 0.1 # 10% of training data for validation
 GATING_PATIENCE = 10 # epochs to wait before early stopping
 GATING_MIN_DELTA = 0.001 # minimum change to qualify as improvement

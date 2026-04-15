@@ -61,6 +61,24 @@ class MultiClassTrAdaBoostCNN:
                     loss.backward()
                     optimizer.step()
             
+            # Calculate training accuracy on TARGET domain only
+            learner.eval()
+            train_preds = []
+            train_labels = []
+            with torch.no_grad():
+                eval_loader = DataLoader(ETCDataset(target_X, target_y), batch_size=BATCH_SIZE, shuffle=False, 
+                                        num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+                for data, target in eval_loader:
+                    data = data.to(DEVICE)
+                    output = learner(data)
+                    preds = torch.argmax(output, dim=1)
+                    train_preds.extend(preds.cpu().numpy())
+                    train_labels.extend(target.numpy())
+            
+            train_preds = np.array(train_preds)
+            train_labels = np.array(train_labels)
+            train_accuracy = 100 * np.mean(train_preds == train_labels)
+            
             # Step 2.3: Calculate error rate epsilon_t on TARGET domain
             learner.eval()
             all_preds = []
@@ -110,7 +128,7 @@ class MultiClassTrAdaBoostCNN:
             # Normalize weights
             beta = beta / beta.sum()
             
-            print(f"Iteration {t+1}/{self.n_estimators}, Target Error: {eps_t:.4f}, Alpha_t: {alpha_t:.4f}")
+            print(f"Learner {t+1}/{self.n_estimators}, Target Error: {eps_t:.4f}, Train Acc: {train_accuracy:.2f}%, Alpha_t: {alpha_t:.4f}")
             
             # Save learner and alpha_t
             self.learners.append(learner)
