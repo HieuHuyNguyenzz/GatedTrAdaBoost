@@ -1,11 +1,11 @@
-# Multi-Class TrAdaBoost-CNN for Traffic Classification
+# Gated TrAdaBoost for Traffic Classification
 
-This repository implements a Transfer Learning-based traffic classification algorithm designed for multi-domain SDN networks. It extends the Multi-class TrAdaBoost approach by integrating a Convolutional Neural Network (CNN) as the weak learner to handle cross-domain classification in encrypted network services.
+This repository implements a Transfer Learning-based traffic classification algorithm designed for multi-domain SDN networks. It extends the Multi-class TrAdaBoost approach by integrating a **Gating Network (Mixture of Experts)** for efficient sparse inference while maintaining accuracy.
 
 ## Key Features
 
 - **MultiClassTrAdaBoostCNN**: The original implementation of Multi-class TrAdaBoost using CNNs to transfer knowledge from a source domain to a target domain.
-- **GatedMultiClassTrAdaBoostCNN**: An improved version featuring a **Gating Network**. This allows for **Sparse Inference**, where only the most relevant weak learners are activated for a given input, reducing computational overhead while maintaining accuracy.
+- **Gated TrAdaBoost**: An improved version featuring a **Gating Network** that acts as a Mixture of Experts. It enables **Sparse Inference**, where only the most relevant weak learners are activated for a given input, reducing computational overhead while maintaining accuracy.
 
 ## Project Structure
 
