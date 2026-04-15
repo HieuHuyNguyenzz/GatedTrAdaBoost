@@ -151,7 +151,10 @@ class MultiClassTrAdaBoostCNN:
         n_warmup = min(10, X_test_tensor.size(0))
         with torch.no_grad():
             for i in range(n_warmup):
-                _ = self.learners[0](X_test_tensor[i:i+1])
+                warmup_input = X_test_tensor[i:i+1]
+                if warmup_input.dim() == 3:
+                    warmup_input = warmup_input.unsqueeze(1)
+                _ = self.learners[0](warmup_input)
         
         # Synchronize before timing
         if DEVICE.type == 'mps':
@@ -201,7 +204,7 @@ class MultiClassTrAdaBoostCNN:
 
     def load(self, path):
         """Loads the ensemble model from a file."""
-        checkpoint = torch.load(path, map_location=DEVICE)
+        checkpoint = torch.load(path, map_location=DEVICE, weights_only=False)
         self.n_estimators = checkpoint['n_estimators']
         self.alphas = checkpoint['alphas']
         input_shape = checkpoint['input_shape']

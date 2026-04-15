@@ -87,9 +87,12 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
         # Warm up
         if DEVICE.type == 'mps':
             with torch.no_grad():
-                _ = self.gate(X_test_tensor[:1])
+                warmup_input = X_test_tensor[:1]
+                if warmup_input.dim() == 3:
+                    warmup_input = warmup_input.unsqueeze(1)
+                _ = self.gate(warmup_input)
                 if len(self.learners) > 0:
-                    _ = self.learners[0](X_test_tensor[:1])
+                    _ = self.learners[0](warmup_input)
                 torch.mps.synchronize()
         
         # Start timing
@@ -161,7 +164,7 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
 
     def load(self, path):
         """Loads the gated ensemble model from a file."""
-        checkpoint = torch.load(path, map_location=DEVICE)
+        checkpoint = torch.load(path, map_location=DEVICE, weights_only=False)
         self.n_estimators = checkpoint['n_estimators']
         self.alphas = checkpoint['alphas']
         input_shape = checkpoint['input_shape']

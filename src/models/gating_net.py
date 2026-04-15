@@ -30,8 +30,8 @@ class GatingNetwork(nn.Module):
     def forward(self, x):
         # x: (batch, h, w) -> (batch, h*w)
         if x.dim() == 3:
-            x = x.view(x.size(0), -1)
+            x = x.reshape(x.size(0), -1)
         elif x.dim() == 4: # (batch, 1, h, w)
-            x = x.view(x.size(0), -1)
+            x = x.reshape(x.size(0), -1)
             
         return self.net(x)

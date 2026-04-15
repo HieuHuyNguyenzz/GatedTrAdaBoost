@@ -131,7 +131,7 @@ def main():
         print(" EVALUATION WITH GATING (Sparse Inference) ")
         print("="*60)
         
-        k_values = [1, 2, 3, 5, 10]
+        k_values = [1, 2, 3, 4, 5]
         k_values = [min(k, model_gated.n_estimators) for k in k_values]
         
         for k in k_values:
