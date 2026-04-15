@@ -1,27 +1,52 @@
-# A New Transfer Learning Based Traffic Classification Algorithm for a-Multi Domain SDN Network
-This is the source code and experiment results in the paper ['A New Transfer Learning-Based Traffic Classification Algorithm for a Multi-Domain SDN Network'](https://dl.acm.org/doi/10.1145/3628797.3628804), published in the SOICT 2023 conference.
+# Multi-Class TrAdaBoost-CNN for Traffic Classification
 
-However, this is not the code that we used in the original paper. This is the code and results that were re-implemented in the HUCE students scientific research seminar, which included one original author of the paper (which is me :D), in order to re-run the experimetals.
+This repository implements a Transfer Learning-based traffic classification algorithm designed for multi-domain SDN networks. It extends the Multi-class TrAdaBoost approach by integrating a Convolutional Neural Network (CNN) as the weak learner to handle cross-domain classification in encrypted network services.
 
-Raw data: [ETC Data](https://drive.google.com/drive/folders/15mljCBCCjsINtjM3CqB-afy2xZ0Shgp2)
+## Key Features
 
-## Abstract
-To enhance the efficiency and resource utilization of a computer
-network, it is imperative to classify network traffic and implement
-distinct priority policies. Network traffic classification plays a pivotal role across various domains, including network administration,
-cybersecurity, and network resource optimization. As encrypted
-network data undergoes diverse evolution, as evident in datasets
-from tech giants like Google, Facebook, and YouTube, traditional
-traffic classification methods have given way to machine learningbased approaches. Given that computer networks are primarily
-deployed as distributed multi-domain systems, employing machine
-learning for traffic classification becomes challenging when a new
-network domain appears with a limited dataset. One potential remedy is to employ transfer learning, allowing knowledge transfer
-from a pre-trained model in an established domain to a new one. In
-this paper, we present two contributions. First, a novel algorithm called Multi-class TrAdaBoost-CNN is introduced to tackle the challenge of cross-domain classification in encrypted network services.
-This algorithm extends the Multi-class TrAdaBoost approach by
-incorporating a Convolutional Neural Network (CNN) as a weak
-learner. Secondly, extensive experiments are conducted on two
-distinct domains characterized by imbalanced data distributions
-to assess the efficacy of our proposed method. The experimental
-results clearly demonstrate that our algorithm outperforms the traditional CNN model, achieving remarkable accuracy improvements
-of up to 16%, even when dealing with extremely limited data.
+- **MultiClassTrAdaBoostCNN**: The original implementation of Multi-class TrAdaBoost using CNNs to transfer knowledge from a source domain to a target domain.
+- **GatedMultiClassTrAdaBoostCNN**: An improved version featuring a **Gating Network**. This allows for **Sparse Inference**, where only the most relevant weak learners are activated for a given input, reducing computational overhead while maintaining accuracy.
+
+## Project Structure
+
+```text
+.
+├── main.py                 # Entry point for training and evaluation
+├── src/
+│   ├── config.py           # Path configurations and hyperparameters
+│   ├── algorithms/
+│   │   └── tr_adaboost.py  # TrAdaBoost and Gated TrAdaBoost implementations
+│   ├── models/
+│   │   ├── cnn_model.py    # CNN architecture for weak learners
+│   │   └── gating_net.py   # MLP architecture for the Gating Network
+│   └── utils/
+│       └── data_loader.py  # Utilities for loading feather datasets
+└── README.md
+```
+
+## Getting Started
+
+### Prerequisites
+
+Ensure you have the following dependencies installed:
+- Python 3.x
+- PyTorch
+- NumPy
+- Scikit-learn
+- Pandas
+- PyArrow (for feather files)
+- tqdm
+
+### Running the Project
+
+To run the training and evaluation pipeline:
+
+```bash
+python main.py
+```
+
+The script will:
+1. Load datasets (Source, Target, and Test).
+2. Train and evaluate the original `MultiClassTrAdaBoostCNN`.
+3. Train and evaluate the `GatedMultiClassTrAdaBoostCNN` (both full and sparse inference).
+4. Output classification reports for each model.
