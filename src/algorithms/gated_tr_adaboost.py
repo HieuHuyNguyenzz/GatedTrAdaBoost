@@ -9,7 +9,6 @@ from torch.optim.lr_scheduler import OneCycleLR
 from src.config import (
     DEVICE, BATCH_SIZE, NUM_CLASSES, NUM_ESTIMATORS,
     GATING_K, GATING_TAU, GATING_LR, GATING_EPOCHS,
-    GATING_VAL_RATIO, GATING_PATIENCE, GATING_MIN_DELTA,
     GATING_GRAD_CLIP, GATING_LAMBDA_LB, GATING_WEIGHT_DECAY,
     NUM_WORKERS
 )
@@ -109,31 +108,11 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
         for i, row in enumerate(top_k_idx):
             binary_labels[i, row] = 1.0
         
-        # Split into train and validation
-        n_samples = len(X_combined)
-        n_val = int(n_samples * GATING_VAL_RATIO)
-        np.random.seed(42)  # for reproducibility
-        indices = np.random.permutation(n_samples)
-        val_idx = indices[:n_val]
-        train_idx = indices[n_val:]
+        binary_labels_tensor = torch.from_numpy(binary_labels).float().to(DEVICE)
         
-        X_train_split = X_combined[train_idx]
-        X_val = X_combined[val_idx]
-        binary_train = binary_labels[train_idx]
-        binary_val = binary_labels[val_idx]
-        
-        print(f"  Train: {len(train_idx)}, Val: {len(val_idx)}")
-        
-        binary_train_tensor = torch.from_numpy(binary_train).float().to(DEVICE)
-        binary_val_tensor = torch.from_numpy(binary_val).float().to(DEVICE)
-        
-        train_dataset = ETCDataset(X_train_split, y_combined[train_idx])
-        val_dataset = ETCDataset(X_val, y_combined[val_idx])
-        
+        train_dataset = ETCDataset(X_combined, y_combined)
         train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, 
                                  num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
-        val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, 
-                               num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
         
         self.gate = GatingNetwork(input_shape=X_train[0].shape, num_learners=self.n_estimators).to(DEVICE)
         
@@ -156,12 +135,7 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
         print(f"  LR: {GATING_LR}, Weight Decay: {GATING_WEIGHT_DECAY}")
         print(f"  Lambda LB: {GATING_LAMBDA_LB}, Grad Clip: {GATING_GRAD_CLIP}")
         
-        best_val_loss = float('inf')
-        best_gate_state = None
-        patience_counter = 0
-        
         for epoch in range(GATING_EPOCHS):
-            # Training
             self.gate.train()
             train_loss = 0
             train_loss_task = 0
@@ -170,9 +144,9 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
             for i, (data, _) in enumerate(train_loader):
                 data = data.to(DEVICE)
                 batch_idx = i * BATCH_SIZE
-                if batch_idx >= len(binary_train_tensor):
+                if batch_idx >= len(binary_labels_tensor):
                     break
-                batch_labels = binary_train_tensor[batch_idx : batch_idx + BATCH_SIZE]
+                batch_labels = binary_labels_tensor[batch_idx : batch_idx + BATCH_SIZE]
                 if batch_labels.size(0) == 0:
                     continue
                 
@@ -203,78 +177,7 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
             train_loss_task = train_loss_task / max(1, len(train_loader))
             train_loss_lb = train_loss_lb / max(1, len(train_loader))
             
-            # Validation
-            self.gate.eval()
-            val_loss = 0
-            val_correct = 0
-            val_total = 0
-            
-            with torch.no_grad():
-                for i, (data, _) in enumerate(val_loader):
-                    data = data.to(DEVICE)
-                    batch_idx = i * BATCH_SIZE
-                    if batch_idx >= len(binary_val_tensor):
-                        break
-                    batch_labels = binary_val_tensor[batch_idx : batch_idx + BATCH_SIZE]
-                    if batch_labels.size(0) == 0:
-                        continue
-                    
-                    gate_logits = self.gate(data)
-                    loss_task = criterion(gate_logits, batch_labels)
-                    loss_lb = load_balance_loss(gate_logits, self.n_estimators)
-                    val_loss += (loss_task + GATING_LAMBDA_LB * loss_lb).item()
-                    
-                    # Compute metrics
-                    probs = torch.sigmoid(gate_logits)
-                    _, topk_pred = torch.topk(probs, k, dim=1)
-                    for b in range(batch_labels.size(0)):
-                        target_set = set(torch.where(batch_labels[b] > 0.5)[0].tolist())
-                        pred_set = set(topk_pred[b].tolist())
-                        if target_set & pred_set:
-                            val_correct += 1
-                        val_total += 1
-            
-            val_loss = val_loss / max(1, len(val_loader))
-            val_acc = 100 * val_correct / val_total if val_total > 0 else 0
-            
-            # Compute monitoring metrics
-            with torch.no_grad():
-                all_logits = []
-                all_labels = []
-                for i, (data, _) in enumerate(val_loader):
-                    data = data.to(DEVICE)
-                    gate_logits = self.gate(data)
-                    all_logits.append(gate_logits)
-                    all_labels.append(binary_val_tensor[i*BATCH_SIZE:(i+1)*BATCH_SIZE])
-                
-                if all_logits:
-                    all_logits = torch.cat(all_logits, dim=0)
-                    all_labels = torch.cat(all_labels, dim=0)
-                    metrics = compute_gating_metrics(all_logits, all_labels, k)
-            
-            print(f"Gate Epoch {epoch+1}/{GATING_EPOCHS}")
-            print(f"  Train Loss: {train_loss:.4f} (Task: {train_loss_task:.4f}, LB: {train_loss_lb:.4f})")
-            print(f"  Val Loss: {val_loss:.4f}, Top-{k} Acc: {val_acc:.2f}%")
-            print(f"  Metrics: Hit Rate: {metrics.get('topk_hit_rate', 0):.4f}, "
-                  f"Util Std: {metrics.get('utilization_std', 0):.4f}, "
-                  f"Entropy: {metrics.get('entropy', 0):.4f}")
-            
-            # Early stopping check
-            if val_loss < best_val_loss - GATING_MIN_DELTA:
-                best_val_loss = val_loss
-                best_gate_state = {key: val.cpu().clone() for key, val in self.gate.state_dict().items()}
-                patience_counter = 0
-            else:
-                patience_counter += 1
-                if patience_counter >= GATING_PATIENCE:
-                    print(f"  Early stopping at epoch {epoch+1}. Best val loss: {best_val_loss:.4f}")
-                    break
-        
-        # Restore best model
-        if best_gate_state is not None:
-            self.gate.load_state_dict(best_gate_state)
-            self.gate.to(DEVICE)
-            print(f"Restored best model with val loss: {best_val_loss:.4f}")
+            print(f"Gate Epoch {epoch+1}/{GATING_EPOCHS}, Loss: {train_loss:.4f} (Task: {train_loss_task:.4f}, LB: {train_loss_lb:.4f})")
     
     def predict_sparse(self, X_test, k=None, return_time=False):
         """
