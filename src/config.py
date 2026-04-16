@@ -25,11 +25,16 @@ NUM_EPOCHS = 30
 BATCH_SIZE = 64
 NUM_ESTIMATORS = 10  # Number of weak learners in ensemble
 
+# Early Stopping for Learners (Weak Classifiers)
+LEARNER_VAL_RATIO = 0.1  # 10% of target training data for validation
+LEARNER_PATIENCE = 5    # epochs to wait before early stopping
+LEARNER_MIN_DELTA = 0.001  # minimum change to qualify as improvement
+
 # DataLoader Settings for Apple Silicon
 NUM_WORKERS = 0  # Set to 0 to avoid multiprocessing issues on Mac
 
 # Gated AdaBoost Settings
-GATING_K = 5 # Top-k learners to select
+GATING_K = 3 # Top-k learners to select
 GATING_TAU = 1.0 # Temperature for softmax
 GATING_LR = 1e-3
 GATING_WEIGHT_DECAY = 1e-2

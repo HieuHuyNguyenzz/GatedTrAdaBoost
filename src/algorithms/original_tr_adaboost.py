@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import time
 from torch.utils.data import DataLoader, WeightedRandomSampler
-from src.config import DEVICE, BATCH_SIZE, NUM_EPOCHS, NUM_CLASSES, NUM_WORKERS, NUM_ESTIMATORS
+from src.config import DEVICE, BATCH_SIZE, NUM_EPOCHS, NUM_CLASSES, NUM_WORKERS, NUM_ESTIMATORS, LEARNER_VAL_RATIO, LEARNER_PATIENCE, LEARNER_MIN_DELTA
 from src.utils.dataset import ETCDataset
 
 # Optimize pin_memory for CUDA only (MPS doesn't benefit from it)
@@ -46,10 +46,33 @@ class MultiClassTrAdaBoostCNN:
             dataloader = DataLoader(combined_dataset, batch_size=BATCH_SIZE, sampler=sampler, 
                                    num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
             
-            # Step 2.2: Train CNNModel (weak learner) on combined data
+            # Step 2.2: Train CNNModel (weak learner) on combined data with early stopping
+            # Split target data for validation
+            n_target_samples = len(target_X)
+            n_val = int(n_target_samples * LEARNER_VAL_RATIO)
+            np.random.seed(42 + t)  # different seed for each learner
+            indices = np.random.permutation(n_target_samples)
+            val_idx = indices[:n_val]
+            train_idx = indices[n_val:]
+            
+            X_target_train = target_X[train_idx]
+            y_target_train = target_y[train_idx]
+            X_target_val = target_X[val_idx]
+            y_target_val = target_y[val_idx]
+            
+            target_train_dataset = ETCDataset(X_target_train, y_target_train)
+            target_val_dataset = ETCDataset(X_target_val, y_target_val)
+            
+            val_loader = DataLoader(target_val_dataset, batch_size=BATCH_SIZE, shuffle=False, 
+                                   num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+            
             learner = self.model_class(input_shape=X_combined[0].shape, num_classes=NUM_CLASSES).to(DEVICE)
             optimizer = optim.Adam(learner.parameters(), lr=1e-3)
             criterion = nn.CrossEntropyLoss()
+            
+            best_val_acc = 0
+            best_learner_state = None
+            patience_counter = 0
             
             learner.train()
             for epoch in range(NUM_EPOCHS):
@@ -63,22 +86,38 @@ class MultiClassTrAdaBoostCNN:
                     optimizer.step()
                     epoch_loss += loss.item()
                 
+                # Validation
+                learner.eval()
+                val_correct = 0
+                val_total = 0
+                with torch.no_grad():
+                    for data, target in val_loader:
+                        data = data.to(DEVICE)
+                        output = learner(data)
+                        preds = torch.argmax(output, dim=1)
+                        val_correct += (preds == target.to(DEVICE)).sum().item()
+                        val_total += target.size(0)
+                val_acc = 100 * val_correct / val_total if val_total > 0 else 0
+                learner.train()
+                
                 if (epoch + 1) % 5 == 0 or epoch == 0:
-                    learner.eval()
-                    with torch.no_grad():
-                        eval_loader = DataLoader(ETCDataset(target_X, target_y), batch_size=BATCH_SIZE, shuffle=False, 
-                                                num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
-                        correct = 0
-                        total = 0
-                        for data, target in eval_loader:
-                            data = data.to(DEVICE)
-                            output = learner(data)
-                            preds = torch.argmax(output, dim=1)
-                            correct += (preds == target.to(DEVICE)).sum().item()
-                            total += target.size(0)
-                        epoch_acc = 100 * correct / total if total > 0 else 0
-                    learner.train()
-                    print(f"  Epoch {epoch+1}/{NUM_EPOCHS}, Loss: {epoch_loss/len(dataloader):.4f}, Acc: {epoch_acc:.2f}%")
+                    print(f"  Epoch {epoch+1}/{NUM_EPOCHS}, Loss: {epoch_loss/len(dataloader):.4f}, Val Acc: {val_acc:.2f}%")
+                
+                # Early stopping check
+                if val_acc > best_val_acc + LEARNER_MIN_DELTA * 100:  # convert to percentage scale
+                    best_val_acc = val_acc
+                    best_learner_state = {k: v.cpu().clone() for k, v in learner.state_dict().items()}
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+                    if patience_counter >= LEARNER_PATIENCE:
+                        print(f"  Early stopping at epoch {epoch+1}. Best val acc: {best_val_acc:.2f}%")
+                        break
+            
+            # Restore best model
+            if best_learner_state is not None:
+                learner.load_state_dict(best_learner_state)
+                learner.to(DEVICE)
             
             # Calculate training accuracy on TARGET domain only
             learner.eval()

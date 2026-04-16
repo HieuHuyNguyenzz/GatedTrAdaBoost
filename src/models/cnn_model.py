@@ -21,8 +21,8 @@ class CNNModel(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
         self.conv4 = nn.Conv2d(64, 32, kernel_size=3, padding=1)
-        self.conv5 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.conv6 = nn.Conv2d(32, 16, kernel_size=3, padding=1)
+        #self.conv5 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
+        #self.conv6 = nn.Conv2d(32, 16, kernel_size=3, padding=1)
         
         self.flatten_dim = self._get_flatten_dim(input_shape)
         
@@ -36,7 +36,7 @@ class CNNModel(nn.Module):
             x = torch.zeros(1, 1, *input_shape)
             x = self.pool(F.relu(self.conv2(F.relu(self.conv1(x)))))   # pool sau cặp conv1-conv2
             x = self.pool(F.relu(self.conv4(F.relu(self.conv3(x)))))   # pool sau cặp conv3-conv4
-            x = self.pool(F.relu(self.conv6(F.relu(self.conv5(x)))))   # pool sau cặp conv5-conv6
+            #x = self.pool(F.relu(self.conv6(F.relu(self.conv5(x)))))   # pool sau cặp conv5-conv6
             return x.numel()
             
     def forward(self, x):
@@ -46,7 +46,7 @@ class CNNModel(nn.Module):
         
         x = self.pool(F.relu(self.conv2(F.relu(self.conv1(x)))))   # pool sau cặp conv1-conv2
         x = self.pool(F.relu(self.conv4(F.relu(self.conv3(x)))))   # pool sau cặp conv3-conv4
-        x = self.pool(F.relu(self.conv6(F.relu(self.conv5(x)))))   # pool sau cặp conv5-conv6
+        #x = self.pool(F.relu(self.conv6(F.relu(self.conv5(x)))))   # pool sau cặp conv5-conv6
         
         x = torch.flatten(x, start_dim=1)
         x = F.relu(self.fc1(x))
