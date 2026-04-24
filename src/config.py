@@ -20,18 +20,17 @@ set_seed(SEED)
 NUM_FEATURE = 256
 NUM_CLASSES = 3
 PACKET_NUM = 20
-CLIENT_LR = 1e-3
-NUM_EPOCHS = 30
-BATCH_SIZE = 64
-NUM_ESTIMATORS = 10  # Number of weak learners in ensemble
-
+CLIENT_LR = 1e-4
+NUM_EPOCHS = 100
+BATCH_SIZE = 32
+NUM_ESTIMATORS = 1  # Number of weak learners in ensemble
 # DataLoader Settings for Apple Silicon
 NUM_WORKERS = 0  # Set to 0 to avoid multiprocessing issues on Mac
 
 # Gated AdaBoost Settings
-GATING_K = 3 # Top-k learners to select
+GATING_K = 1 # Top-k learners to select
 GATING_TAU = 1.0 # Temperature for softmax
-GATING_LR = 1e-3
+GATING_LR = 1e-4
 GATING_WEIGHT_DECAY = 1e-2
 GATING_EPOCHS = 30
 GATING_GRAD_CLIP = 1.0 # gradient clipping
@@ -40,6 +39,12 @@ LAMBDA_KL = 1.0
 LAMBDA_RANK = 0.1
 LAMBDA_SPARSE = 0.1
 LAMBDA_MARGIN = 1.0
+
+# GRPO Settings
+GRPO_G = 8 # Group size
+GRPO_LAMBDA = 0.01 # Sparsity penalty
+GRPO_CLIP = 0.2 # PPO clip range
+GRPO_EPOCHS = 10 # RL training epochs
 
 # Device Configuration for MacBook M-series and others
 if torch.backends.mps.is_available():
@@ -54,4 +59,4 @@ DATA_DIR = "Data"
 SOURCE_PATH = f"{DATA_DIR}/Domain 1_256.feather"
 TARGET_PATH = f"{DATA_DIR}/Domain 2_256.feather"
 TARGET_TEST_RATIO = 0.90  # 90% of target domain for testing
-TARGET_TRAIN_LABELED_RATIO = 0.2  # 20% of the training 10% is labeled, 80% is unlabeled
+TARGET_TRAIN_LABELED_RATIO = 0.1  # 20% of the training 10% is labeled, 80% is unlabeled

@@ -27,6 +27,8 @@ def main():
                         help="Whether to use semi-supervised pre-training with unlabeled target data.")
     parser.add_argument('--use_soft_labels', action='store_true',
                         help="Whether to use weighted soft labels instead of binary oracle labels for gating training.")
+    parser.add_argument('--use_grpo', action='store_true',
+                        help="Whether to use Group Relative Policy Optimization (GRPO) for training the gating network.")
     args = parser.parse_args()
 
     print(f"Using device: {DEVICE}")
@@ -117,9 +119,15 @@ def main():
         
         # Only pass unlabeled data if --use_semi flag is set
         u_X = target_unlabeled_X if args.use_semi else None
-        model_gated.train_gate(target_labeled_X, target_labeled_y, s_X, s_y, X_unlabeled=u_X, use_soft_labels=args.use_soft_labels)
-        model_gated.save(GATED_MODEL_PATH, input_shape)
         
+        if args.use_grpo:
+            print("\nTraining Gating Network with GRPO...")
+            model_gated.train_gate_grpo(target_labeled_X, target_labeled_y)
+        else:
+            model_gated.train_gate(target_labeled_X, target_labeled_y, s_X, s_y, X_unlabeled=u_X, use_soft_labels=args.use_soft_labels)
+        
+        model_gated.save(GATED_MODEL_PATH, input_shape)
+
     elif args.mode == 'train_gate':
         if os.path.exists(GATED_MODEL_PATH):
             print("Loading existing Gated Model to re-train gate...")
@@ -139,7 +147,13 @@ def main():
         
         # Only pass unlabeled data if --use_semi flag is set
         u_X = target_unlabeled_X if args.use_semi else None
-        model_gated.train_gate(target_labeled_X, target_labeled_y, s_X, s_y, X_unlabeled=u_X, use_soft_labels=args.use_soft_labels)
+        
+        if args.use_grpo:
+            print("\nTraining Gating Network with GRPO...")
+            model_gated.train_gate_grpo(target_labeled_X, target_labeled_y)
+        else:
+            model_gated.train_gate(target_labeled_X, target_labeled_y, s_X, s_y, X_unlabeled=u_X, use_soft_labels=args.use_soft_labels)
+        
         model_gated.save(GATED_MODEL_PATH, input_shape)
     else:
         if os.path.exists(GATED_MODEL_PATH):

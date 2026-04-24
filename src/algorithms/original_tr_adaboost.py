@@ -115,16 +115,16 @@ class MultiClassTrAdaBoostCNN:
             all_preds = np.array(all_preds)
             all_labels = np.array(all_labels)
             
-            # Extract predictions and labels for TARGET domain (first n_target samples)
-            preds_target = all_preds[:n_target]
-            labels_target = all_labels[:n_target]
-            beta_target = beta[:n_target]
-            
+            # Extract predictions and labels for SOURCE domain (index n_target → end)
+            preds_source = all_preds[n_target:]
+            labels_source = all_labels[n_target:]
+            beta_source = beta[n_target:]
+
             # indicator: 1 if prediction != label, 0 otherwise
-            indicator_target = (preds_target != labels_target).astype(float)
-            
-            # epsilon_t = sum(beta_i * I(h_t(x_i) != c(x_i))) / sum(beta_i) for target domain
-            eps_t = np.sum(beta_target * indicator_target) / np.sum(beta_target)
+            indicator_source = (preds_source != labels_source).astype(float)
+
+            # epsilon_t tính trên SOURCE domain theo đúng công thức bài báo
+            eps_t = np.sum(beta_source * indicator_source) / np.sum(beta_source)
             eps_t = np.clip(eps_t, 1e-10, (NUM_CLASSES - 1) / NUM_CLASSES - 1e-10)
             
             # Step 2.4: Calculate parameters alpha_t and C^t

@@ -16,6 +16,7 @@ from src.config import (
 from src.models.gating_net import GatingNetwork, GatingCNN
 from src.utils.dataset import ETCDataset
 from src.algorithms.original_tr_adaboost import MultiClassTrAdaBoostCNN, PIN_MEMORY
+from src.algorithms.grpo_trainer import GRPOTrainer
 
 
 def load_balance_loss(gate_logits, num_experts):
@@ -158,9 +159,11 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
         contributions = (preds == y_combined[:, np.newaxis]) * alphas
         
         if use_soft_labels:
-            # Normalize contributions to [0, 1] range (Soft Labels)
-            row_sums = contributions.sum(axis=1, keepdims=True)
-            binary_labels = contributions / (row_sums + 1e-8)
+            # Normalize contributions with a power transformation to increase contrast (Soft Labels)
+            # Squaring the contributions amplifies the gap between the best and mediocre experts
+            contributions_sq = contributions ** 2
+            row_sums = contributions_sq.sum(axis=1, keepdims=True)
+            binary_labels = contributions_sq / (row_sums + 1e-8)
             binary_labels = binary_labels.astype(np.float32)
         else:
             # Multi-label: create binary labels (learner in top-k = 1, else = 0)
@@ -255,6 +258,43 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
             
             print(f"Gate Epoch {epoch+1}/{GATING_EPOCHS}, Loss: {train_loss:.4f} (Task: {train_loss_task:.4f}, LB: {train_loss_lb:.4f}) | HitRate: {metrics['topk_hit_rate']:.4f}, UtilStd: {metrics['utilization_std']:.4f}")
     
+    def train_gate_grpo(self, X_train, y_train, epochs=10, lr=1e-4):
+        """
+        Train the gating network using Group Relative Policy Optimization (GRPO).
+        This allows the model to dynamically choose the number of experts.
+        """
+        print(f"\nTraining Gating Network with GRPO for {epochs} epochs...")
+        
+        # Initialize Gating Network if not already done
+        if self.gate is None:
+            self.gate = GatingCNN(input_shape=X_train[0].shape, num_learners=self.n_estimators).to(DEVICE)
+            
+        # Prepare data
+        train_dataset = ETCDataset(X_train, y_train)
+        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, 
+                                  num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY)
+        
+        trainer = GRPOTrainer(
+            gating_net=self.gate,
+            learners=self.learners,
+            alphas=self.alphas,
+            lr=lr
+        )
+        
+        for epoch in range(epochs):
+            total_loss = 0
+            avg_reward = 0
+            
+            for data, labels in train_loader:
+                data = data.to(DEVICE)
+                labels = labels.to(DEVICE)
+                
+                loss, reward = trainer.train_step(data, labels)
+                total_loss += loss
+                avg_reward += reward
+                
+            print(f"GRPO Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(train_loader):.4f}, Avg Reward: {avg_reward/len(train_loader):.4f}")
+
     def predict_sparse(self, X_test, k=None, return_time=False):
         """
         Gated Sparse Inference prediction.
@@ -370,7 +410,7 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
         # Load Gating Network
         gate_sd = checkpoint.get('gate_state_dict')
         if gate_sd is not None:
-            self.gate = GatingNetwork(input_shape=input_shape, num_learners=self.n_estimators).to(DEVICE)
-            self.gate.load_state_dict(gate_sd)
+                self.gate = GatingCNN(input_shape=input_shape, num_learners=self.n_estimators).to(DEVICE)
+                self.gate.load_state_dict(gate_sd)
             
         print(f"Gated model loaded from {path}")

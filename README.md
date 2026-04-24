@@ -6,6 +6,7 @@ This repository implements a Transfer Learning-based traffic classification algo
 
 - **MultiClassTrAdaBoostCNN**: The original implementation of Multi-class TrAdaBoost using CNNs to transfer knowledge from a source domain to a target domain.
 - **Gated TrAdaBoost**: An improved version featuring a **Gating Network** that acts as a Mixture of Experts. It enables **Sparse Inference**, where only the most relevant weak learners are activated for a given input, reducing computational overhead while maintaining accuracy.
+- **GRPO Training**: Implementation of **Group Relative Policy Optimization (GRPO)** to train the Gating Network using Reinforcement Learning. This allows the model to dynamically choose the optimal number of experts for each input, balancing accuracy and efficiency.
 
 ## Project Structure
 
@@ -59,6 +60,11 @@ python main.py --mode <mode_name>
 | `test_with_gating` | Evaluates the Sparse Inference performance with different top-k learners. |
 | `test` (Default) | Performs both full and sparse evaluations for a comprehensive comparison. |
 
+#### Advanced Gating Options
+- `--use_semi`: Use semi-supervised pre-training with unlabeled target data.
+- `--use_soft_labels`: Use weighted soft labels instead of binary oracle labels.
+- `--use_grpo`: Train the Gating Network using **GRPO (Reinforcement Learning)** for dynamic expert selection.
+
 #### Examples
 ```bash
 # Train only original TrAdaBoost (faster - recommended for initial experiments)
@@ -67,8 +73,11 @@ python main.py --mode tradaboost_only
 # Train everything from scratch
 python main.py --mode train_full
 
-# To only update the Gating Network
-python main.py --mode train_gate
+# Train Gating Network using GRPO (Dynamic Expert Selection)
+python main.py --mode train_full --use_grpo
+
+# To only update the Gating Network with GRPO
+python main.py --mode train_gate --use_grpo
 
 # To run comprehensive tests
 python main.py --mode test
