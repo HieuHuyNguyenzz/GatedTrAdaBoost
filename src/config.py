@@ -17,18 +17,18 @@ SEED = 42
 set_seed(SEED)
 
 # General Settings
-NUM_FEATURE = 256
+NUM_FEATURE = 128
 NUM_CLASSES = 3
 PACKET_NUM = 20
 CLIENT_LR = 1e-4
-NUM_EPOCHS = 100
+NUM_EPOCHS = 50
 BATCH_SIZE = 32
-NUM_ESTIMATORS = 1  # Number of weak learners in ensemble
+NUM_ESTIMATORS = 10  # Number of weak learners in ensemble
 # DataLoader Settings for Apple Silicon
 NUM_WORKERS = 0  # Set to 0 to avoid multiprocessing issues on Mac
 
 # Gated AdaBoost Settings
-GATING_K = 1 # Top-k learners to select
+GATING_K = 5 # Top-k learners to select
 GATING_TAU = 1.0 # Temperature for softmax
 GATING_LR = 1e-4
 GATING_WEIGHT_DECAY = 1e-2
@@ -56,7 +56,7 @@ else:
 
 # Data Paths
 DATA_DIR = "Data"
-SOURCE_PATH = f"{DATA_DIR}/Domain 1_256.feather"
-TARGET_PATH = f"{DATA_DIR}/Domain 2_256.feather"
+SOURCE_PATH = f"{DATA_DIR}/Domain 1_128.feather"
+TARGET_PATH = f"{DATA_DIR}/Domain 2_128.feather"
 TARGET_TEST_RATIO = 0.90  # 90% of target domain for testing
 TARGET_TRAIN_LABELED_RATIO = 0.1  # 20% of the training 10% is labeled, 80% is unlabeled

@@ -70,7 +70,7 @@ Mỗi expert là một mạng CNN với cấu trúc:
 - **Layers**: 
     - 2 lớp Convolution (`Conv2d`) với 16 filters $\rightarrow$ ReLU.
     - 1 lớp Max Pooling (`MaxPool2d`).
-- **Global Average Pooling (GAP)**: Thay vì flatten, mạng sử dụng GAP để nén toàn bộ feature map thành một vector đặc trưng duy nhất (16 chiều). Điều này giúp giảm tham số và ngăn overfitting.
+- **Attention Pooling**: Thay vì flatten hoặc GAP, mạng sử dụng cơ chế Attention để học trọng số cho từng vùng của feature map và tính tổng có trọng số. Điều này giúp Gating Network tập trung vào các vùng quan trọng nhất của traffic flow để quyết định routing.
 - **Final Layer**: `Linear(16, num_learners)` $\rightarrow$ Output điểm số cho từng expert.
 
 ---

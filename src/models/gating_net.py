@@ -40,9 +40,15 @@ class GatingCNN(nn.Module):
         super(GatingCNN, self).__init__()
         
         # Compact CNN architecture
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=5, padding=2)
-        self.conv2 = nn.Conv2d(16, 16, kernel_size=5, padding=2)
+        self.conv1 = nn.Conv2d(1, 128, kernel_size=5, padding=2)
+        self.conv2 = nn.Conv2d(128, 64, kernel_size=5, padding=2)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(64, 32, kernel_size=3, padding=1)
+        self.conv5 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
+        self.conv6 = nn.Conv2d(32, 16, kernel_size=3, padding=1)
+        
+        self.attn_conv = nn.Conv2d(16, 1, kernel_size=1)
         
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(16, num_learners)
@@ -52,12 +58,14 @@ class GatingCNN(nn.Module):
         if x.dim() == 3:
             x = x.unsqueeze(1)
         
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = self.pool(x)
+        x = self.pool(F.relu(self.conv2(F.relu(self.conv1(x)))))   # pool sau cặp conv1-conv2
+        x = self.pool(F.relu(self.conv4(F.relu(self.conv3(x)))))   # pool sau cặp conv3-conv4
+        x = self.pool(F.relu(self.conv6(F.relu(self.conv5(x))))) 
         
-        # Global Average Pooling (GAP) over height and width
-        x = torch.mean(x, dim=[2, 3])
+        # Attention Pooling: replace GAP with weighted sum
+        attn_map = self.attn_conv(x)
+        attn_map = torch.softmax(torch.softmax(attn_map, dim=-1), dim=-2)
+        x = (x * attn_map).sum(dim=[2, 3])
         
         x = self.dropout(x)
         x = self.fc(x)
