@@ -63,8 +63,9 @@ class GatingCNN(nn.Module):
         x = self.pool(F.relu(self.conv6(F.relu(self.conv5(x))))) 
         
         # Attention Pooling: replace GAP with weighted sum
-        attn_map = self.attn_conv(x)
-        attn_map = torch.softmax(torch.softmax(attn_map, dim=-1), dim=-2)
+        attn_map = self.attn_conv(F.relu(x))
+        B, _, H, W = attn_map.shape
+        attn_map = torch.softmax(attn_map.view(B, -1), dim=-1).view(B, 1, H, W)
         x = (x * attn_map).sum(dim=[2, 3])
         
         x = self.dropout(x)
