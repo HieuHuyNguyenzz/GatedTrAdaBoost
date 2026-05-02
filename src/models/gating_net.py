@@ -49,10 +49,19 @@ class GatingCNN(nn.Module):
         self.conv6 = nn.Conv2d(32, 16, kernel_size=3, padding=1)
         
         self.attn_conv = nn.Conv2d(16, 1, kernel_size=1)
-        
+        self.flatten_dim = self._get_flatten_dim(input_shape)
         self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(16, num_learners)
+        self.fc = nn.Linear(self.flatten_dim, num_learners)
         
+    def _get_flatten_dim(self, input_shape):
+        with torch.no_grad():
+            # dummy input: (batch, channel, height, width)
+            x = torch.zeros(1, 1, *input_shape)
+            x = self.pool(F.relu(self.conv2(F.relu(self.conv1(x)))))   # pool sau cặp conv1-conv2
+            x = self.pool(F.relu(self.conv4(F.relu(self.conv3(x)))))   # pool sau cặp conv3-conv4
+            x = self.pool(F.relu(self.conv6(F.relu(self.conv5(x)))))   # pool sau cặp conv5-conv6
+            return x.numel()
+            
     def forward(self, x):
         # Add channel dimension: (batch, h, w) -> (batch, 1, h, w)
         if x.dim() == 3:
@@ -63,11 +72,11 @@ class GatingCNN(nn.Module):
         x = self.pool(F.relu(self.conv6(F.relu(self.conv5(x))))) 
         
         # Attention Pooling: replace GAP with weighted sum
-        attn_map = self.attn_conv(F.relu(x))
-        B, _, H, W = attn_map.shape
-        attn_map = torch.softmax(attn_map.view(B, -1), dim=-1).view(B, 1, H, W)
-        x = (x * attn_map).sum(dim=[2, 3])
-        
+        #attn_map = self.attn_conv(F.relu(x))
+        #B, _, H, W = attn_map.shape
+        #attn_map = torch.softmax(attn_map.view(B, -1), dim=-1).view(B, 1, H, W)
+        #x = (x * attn_map).sum(dim=[2, 3])
+        x = torch.flatten(x, start_dim=1)
         x = self.dropout(x)
         x = self.fc(x)
         return x

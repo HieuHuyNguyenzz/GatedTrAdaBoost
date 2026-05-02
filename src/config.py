@@ -21,14 +21,15 @@ NUM_FEATURE = 256
 NUM_CLASSES = 3
 PACKET_NUM = 20
 CLIENT_LR = 1e-4
-NUM_EPOCHS = 50
-BATCH_SIZE = 32
-NUM_ESTIMATORS = 10  # Number of weak learners in ensemble
+WEIGHT_DECAY = 1e-2
+NUM_EPOCHS = 10
+BATCH_SIZE = 16
+NUM_ESTIMATORS = 20  # Number of weak learners in ensemble
 # DataLoader Settings for Apple Silicon
-NUM_WORKERS = 4  # Set to 0 to avoid multiprocessing issues on Mac
+NUM_WORKERS = 10  # Set to 0 to avoid multiprocessing issues on Mac
 
 # Gated AdaBoost Settings
-GATING_K = 3 # Top-k learners to select
+GATING_K = 14 # Top-k learners to select
 GATING_LR = 1e-4
 GATING_WEIGHT_DECAY = 1e-2
 GATING_EPOCHS = 30
@@ -51,7 +52,6 @@ else:
 
 # Data Paths
 DATA_DIR = "Data"
-SOURCE_PATH = f"{DATA_DIR}/Domain 1_256.feather"
-TARGET_PATH = f"{DATA_DIR}/Domain 2_256.feather"
-TARGET_TEST_RATIO = 0.90  # 90% of target domain for testing
-TARGET_TRAIN_LABELED_RATIO = 0.1  # 20% of the training 10% is labeled, 80% is unlabeled
+SOURCE_PATH = f"{DATA_DIR}/Domain 3.feather"
+TARGET_TRAIN_PATH = f"{DATA_DIR}/df0.05.feather"
+TARGET_TEST_PATH = f"{DATA_DIR}/df0.95.feather"

@@ -153,10 +153,16 @@ class GatedMultiClassTrAdaBoostCNN(MultiClassTrAdaBoostCNN):
             print(f"  Using {len(X_combined)} samples")
         
         # Precompute oracle labels (which experts predict correctly)
-        preds = self._get_all_predictions(X_combined)
-        alphas = np.array(self.alphas)
+        # Use probabilities to measure confidence instead of binary correctness
+        all_probs = self._get_all_probabilities(X_combined)
         
-        contributions = (preds == y_combined[:, np.newaxis]) * alphas
+        # Use advanced indexing to extract the probability of the true label for each expert
+        # all_probs shape: (samples, n_estimators, num_classes)
+        # Result shape: (samples, n_estimators)
+        n_samples = all_probs.shape[0]
+        contributions = all_probs[np.arange(n_samples)[:, np.newaxis], 
+                                  np.arange(self.n_estimators), 
+                                  y_combined[:, np.newaxis]]
         
         if use_soft_labels:
             # Normalize contributions with a power transformation to increase contrast (Soft Labels)

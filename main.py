@@ -1,10 +1,12 @@
 import numpy as np
 import os
+import torch
 import argparse
 import src.config as config
 from sklearn.metrics import classification_report
-from src.config import SOURCE_PATH, TARGET_PATH, TARGET_TEST_RATIO, DEVICE, set_seed, SEED, NUM_ESTIMATORS, GATING_K
-from src.utils.data_loader import load_source_data, load_target_data
+from src.config import SOURCE_PATH, TARGET_TRAIN_PATH, TARGET_TEST_PATH, DEVICE, set_seed, SEED, NUM_ESTIMATORS, GATING_K
+from src.utils.data_loader import load_source_data, load_target_train_data, load_target_test_data
+from src.utils.trainer import train_cnn_baseline, predict_cnn_baseline
 from src.models.cnn_model import CNNModel
 from src.algorithms.original_tr_adaboost import MultiClassTrAdaBoostCNN
 from src.algorithms.gated_tr_adaboost import GatedMultiClassTrAdaBoostCNN
@@ -47,8 +49,9 @@ def main():
     # Source domain: Full dataset for training
     source_X, source_y = load_source_data(SOURCE_PATH)
     
-    # Target domain: Split into labeled, unlabeled, and test
-    target_labeled_X, target_labeled_y, target_unlabeled_X, target_unlabeled_y, test_X, test_y = load_target_data(TARGET_PATH, TARGET_TEST_RATIO)
+    # Target domain: Load separate train and test files
+    target_labeled_X, target_labeled_y, target_unlabeled_X, target_unlabeled_y = load_target_train_data(TARGET_TRAIN_PATH)
+    test_X, test_y = load_target_test_data(TARGET_TEST_PATH)
     
     if source_X is None or target_labeled_X is None or test_X is None:
         print("Error loading datasets. Please check paths in src/config.py")
@@ -56,11 +59,13 @@ def main():
 
     input_shape = target_labeled_X[0].shape
     print(f"\nSource domain (Domain 1): {source_X.shape} flows")
-    print(f"Target domain (Domain 2): Labeled {target_labeled_X.shape}, Unlabeled {target_unlabeled_X.shape}, Test {test_X.shape}")
+    unlabeled_shape = target_unlabeled_X.shape if target_unlabeled_X is not None else "None"
+    print(f"Target domain (Domain 2): Labeled {target_labeled_X.shape}, Unlabeled {unlabeled_shape}, Test {test_X.shape}")
     
     # Paths for saving models
     ORIG_MODEL_PATH = "model_orig.pth"
     GATED_MODEL_PATH = "model_gated.pth"
+    BASELINE_MODEL_PATH = "model_baseline.pth"
     
     # Always train from scratch (delete existing models for training modes)
     if args.mode in ['train_full', 'tradaboost_only']:
@@ -69,6 +74,8 @@ def main():
             os.remove(ORIG_MODEL_PATH)
         if os.path.exists(GATED_MODEL_PATH):
             os.remove(GATED_MODEL_PATH)
+        if os.path.exists(BASELINE_MODEL_PATH):
+            os.remove(BASELINE_MODEL_PATH)
     elif args.mode == 'train_gate':
         if os.path.exists(GATED_MODEL_PATH):
             print("Removing existing gated model file...")
@@ -80,6 +87,31 @@ def main():
     # Only create gated model if needed
     if args.mode not in ['tradaboost_only']:
         model_gated = GatedMultiClassTrAdaBoostCNN(CNNModel, n_estimators=NUM_ESTIMATORS)
+    
+    # 0. Handle Baseline CNN Model
+    if args.mode == 'train_full':
+        print("\nTraining Baseline CNN Model (Standard Training on combined data)...")
+        model_baseline = train_cnn_baseline(CNNModel, target_labeled_X, target_labeled_y, source_X, source_y)
+        torch.save(model_baseline.state_dict(), BASELINE_MODEL_PATH)
+        print(f"Baseline model saved to {BASELINE_MODEL_PATH}")
+    elif os.path.exists(BASELINE_MODEL_PATH):
+        print("Loading pre-trained Baseline Model...")
+        model_baseline = CNNModel(input_shape=input_shape).to(DEVICE)
+        model_baseline.load_state_dict(torch.load(BASELINE_MODEL_PATH, map_location=DEVICE))
+        model_baseline.eval()
+    else:
+        model_baseline = None
+        if args.mode != 'train_full':
+            print("Warning: No pre-trained Baseline Model found.")
+
+    # --- Evaluation: Baseline CNN Only ---
+    if model_baseline is not None:
+        print("\n" + "="*60)
+        print(" EVALUATION: Baseline CNN Model (Standard Training) ")
+        print("="*60)
+        baseline_predictions, baseline_time = predict_cnn_baseline(model_baseline, test_X, return_time=True)
+        print(classification_report(test_y, baseline_predictions))
+        print(f"\n>>> Inference Time: {baseline_time:.4f} ms/sample")
     
     # 1. Handle Original Model
     if args.mode == 'train_full' or args.mode == 'tradaboost_only':

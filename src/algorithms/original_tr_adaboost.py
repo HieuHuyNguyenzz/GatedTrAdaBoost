@@ -1,10 +1,11 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import time
 from torch.utils.data import DataLoader, WeightedRandomSampler
-from src.config import DEVICE, BATCH_SIZE, NUM_EPOCHS, NUM_CLASSES, NUM_WORKERS, NUM_ESTIMATORS, CLIENT_LR
+from src.config import DEVICE, BATCH_SIZE, NUM_EPOCHS, NUM_CLASSES, NUM_WORKERS, NUM_ESTIMATORS, CLIENT_LR, WEIGHT_DECAY
 from src.utils.dataset import ETCDataset
 
 # Optimize pin_memory for CUDA only (MPS doesn't benefit from it)
@@ -48,7 +49,7 @@ class MultiClassTrAdaBoostCNN:
             
             # Step 2.2: Train CNNModel (weak learner) on combined data
             learner = self.model_class(input_shape=X_combined[0].shape, num_classes=NUM_CLASSES).to(DEVICE)
-            optimizer = optim.Adam(learner.parameters(), lr=CLIENT_LR)
+            optimizer = optim.Adam(learner.parameters(), lr=CLIENT_LR, weight_decay=WEIGHT_DECAY)
             criterion = nn.CrossEntropyLoss()
             
             learner.train()
@@ -155,22 +156,27 @@ class MultiClassTrAdaBoostCNN:
     
     def _get_all_predictions(self, X):
         """Helper to get predictions from all learners for a given X."""
+        return np.argmax(self._get_all_probabilities(X), axis=-1)
+
+    def _get_all_probabilities(self, X):
+        """Helper to get softmax probabilities from all learners for a given X."""
         X_tensor = torch.from_numpy(X).float().to(DEVICE)
         if X_tensor.dim() == 3:
             X_tensor = X_tensor.unsqueeze(1)
             
-        all_preds = []
+        all_probs = []
         with torch.no_grad():
             for learner in self.learners:
                 learner.eval()
-                preds = []
+                probs = []
                 for i in range(0, X_tensor.size(0), BATCH_SIZE):
                     batch = X_tensor[i : i + BATCH_SIZE]
                     out = learner(batch)
-                    preds.append(torch.argmax(out, dim=1).cpu().numpy())
-                all_preds.append(np.concatenate(preds))
+                    # Apply softmax to get probabilities
+                    probs.append(F.softmax(out, dim=1).cpu().numpy())
+                all_probs.append(np.concatenate(probs))
         
-        return np.array(all_preds).T # (samples, T)
+        return np.array(all_probs).transpose(1, 0, 2) # (samples, T, num_classes)
     
     def predict(self, X_test, return_time=False):
         """

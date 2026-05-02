@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from src.config import NUM_FEATURE, PACKET_NUM, SEED, TARGET_TRAIN_LABELED_RATIO
+from src.config import NUM_FEATURE, PACKET_NUM, SEED
 
 def data_processing(df):
     """
@@ -41,39 +41,28 @@ def load_source_data(path):
         print(f"Error loading source data from {path}: {e}")
         return None, None
 
-def load_target_data(path, test_ratio=0.2, seed=None):
+def load_target_train_data(path, seed=None):
     """
-    Loads target domain data and splits into labeled, unlabeled, and test sets.
-    
-    Args:
-        path: Path to target domain feather file.
-        test_ratio: Ratio of data for testing (default 0.2 = 20%).
-        seed: Random seed for reproducibility. Defaults to config SEED.
-        
-    Returns:
-        tuple: (labeled_X, labeled_y, unlabeled_X, unlabeled_y, test_X, test_y)
+    Loads target domain training data. Now assumes all training data is labeled.
     """
-    if seed is None:
-        seed = SEED
     try:
         df = pd.read_feather(path)
         X, y = data_processing(df)
         
-        # Step 1: Split target domain into Semi-supervised (train) and Test
-        X_semi, X_test, y_semi, y_test = train_test_split(
-            X, y, test_size=test_ratio, random_state=seed, stratify=y
-        )
+        print(f"Target Training domain: {len(X)} samples (all labeled)")
         
-        # Step 2: Split Semi-supervised into Labeled and Unlabeled
-        X_labeled, X_unlabeled, y_labeled, y_unlabeled = train_test_split(
-            X_semi, y_semi, train_size=TARGET_TRAIN_LABELED_RATIO, random_state=seed, stratify=y_semi
-        )
-        
-        print(f"Target domain: {len(X)} samples")
-        print(f"  -> Test: {len(X_test)}")
-        print(f"  -> Semi-supervised: {len(X_semi)} (Labeled: {len(X_labeled)}, Unlabeled: {len(X_unlabeled)})")
-        
-        return X_labeled, y_labeled, X_unlabeled, y_unlabeled, X_test, y_test
+        return X, y, None, None
     except Exception as e:
-        print(f"Error loading target data from {path}: {e}")
-        return None, None, None, None, None, None
+        print(f"Error loading target train data from {path}: {e}")
+        return None, None, None, None
+
+def load_target_test_data(path):
+    """
+    Loads target domain test data.
+    """
+    try:
+        df = pd.read_feather(path)
+        return data_processing(df)
+    except Exception as e:
+        print(f"Error loading target test data from {path}: {e}")
+        return None, None
