@@ -6,6 +6,7 @@ This repository implements a Transfer Learning-based traffic classification algo
 
 - **MultiClassTrAdaBoostCNN**: The original implementation of Multi-class TrAdaBoost using CNNs to transfer knowledge from a source domain to a target domain.
 - **Gated TrAdaBoost**: An improved version featuring a **Gating Network** that acts as a Mixture of Experts. It enables **Sparse Inference**, where only the most relevant weak learners are activated for a given input, reducing computational overhead while maintaining accuracy.
+- **Baseline CNN**: A standard CNN model trained on combined source and target data, serving as a performance benchmark.
 - **GRPO Training**: Implementation of **Group Relative Policy Optimization (GRPO)** to train the Gating Network using Reinforcement Learning. This allows the model to dynamically choose the optimal number of experts for each input, balancing accuracy and efficiency.
 
 ## Project Structure
@@ -23,8 +24,9 @@ This repository implements a Transfer Learning-based traffic classification algo
 │   │   └── gating_net.py   # MLP architecture for the Gating Network
 │   └── utils/
 │       ├── data_loader.py  # Utilities for loading feather datasets
-│       └── dataset.py      # PyTorch Dataset class
-├── Data/                   # Data files (Domain 1_32.feather, Domain 2_32.feather)
+│       ├── dataset.py      # PyTorch Dataset class
+│       └── trainer.py      # Baseline model training utilities
+├── Data/                   # Data files (Domain 3.feather, df0.05.feather, df0.95.feather)
 └── README.md
 ```
 
